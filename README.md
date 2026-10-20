@@ -4,6 +4,10 @@ A graphs-only dashboard for [COSMIC System Monitor](https://github.com/pop-os/co
 
 [Português](#português)
 
+![Graphs-only dashboard showing CPU, memory, disk, network, GPU and VRAM cards](docs/screenshots/dashboard-en.png)
+
+*Graphs-only dashboard. Captured from the running application on COSMIC; visible cards depend on detected hardware.*
+
 ## Install a prebuilt Debian package (recommended)
 
 Download the **amd64 `.deb`** from the [latest release](https://github.com/Arthurregiani/cosmic-monitor-graphs/releases/latest). It targets **Pop!_OS 24.04 with COSMIC** (Ubuntu 24.04 library baseline). No Rust or compilation is required.
@@ -90,6 +94,10 @@ To port the overlay, prepare a clean checkout of the desired upstream revision, 
 ## Português
 
 Esta modificação adiciona o modo **Exibir apenas gráficos** ao Monitor do Sistema COSMIC. Os cartões ocupam a largura da janela, sem as listas de aplicativos/processos e sem o processo de maior consumo em cada cartão. O menu permite restaurar o painel completo, e a escolha é salva.
+
+![Painel em português com gráficos de CPU, memória, disco, rede, GPU e VRAM](docs/screenshots/dashboard-pt-BR.png)
+
+*Captura real no COSMIC, com o modo de gráficos ativado. Os cartões disponíveis dependem do hardware detectado.*
 
 Para instalar **sem compilar**, baixe o `.deb` em [Releases](https://github.com/Arthurregiani/cosmic-monitor-graphs/releases/latest) e execute `sudo apt install ./cosmic-monitor-graphs_1.1.0_amd64.deb`. O pacote é para amd64 com Pop!_OS 24.04/COSMIC. Para remover, use `sudo apt remove cosmic-monitor-graphs`. Se você já usava a instalação manual, veja a seção de migração acima.
 
