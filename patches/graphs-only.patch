@@ -1,0 +1,237 @@
+diff --git a/i18n/en/cosmic_monitor.ftl b/i18n/en/cosmic_monitor.ftl
+index ed90140..fd6434f 100644
+--- a/i18n/en/cosmic_monitor.ftl
++++ b/i18n/en/cosmic_monitor.ftl
+@@ -1,4 +1,4 @@
+-app-name = COSMIC System Monitor
++app-name = COSMIC Monitor (Graphs)
+ comment = System monitor for the COSMIC desktop
+ keywords = Monitor;System;Process;CPU;Memory;Network;History;Usage;
+ see-all-applications = See all applications
+@@ -105,6 +105,8 @@ quit-title = Quit the process?
+ quit-body = Do you want to end "{$name}"?
+ 
+ # Menu
++menu-only-graphs = Show graphs only
++menu-show-processes = Show applications and processes
+ 
+ ## View
+ menu-settings = Settings...
+diff --git a/i18n/pt-BR/cosmic_monitor.ftl b/i18n/pt-BR/cosmic_monitor.ftl
+index dd89fc5..4dbb8b9 100644
+--- a/i18n/pt-BR/cosmic_monitor.ftl
++++ b/i18n/pt-BR/cosmic_monitor.ftl
+@@ -1,4 +1,4 @@
+-app-name = Monitor do Sistema
++app-name = Monitor COSMIC (Gráficos)
+ comment = Monitor de sistema do ambiente COSMIC
+ keywords = Monitor;Sistema;Processo;CPU;Memória;Rede;Histórico;Uso;
+ see-all-applications = Ver todos os aplicativos
+@@ -59,6 +59,8 @@ force-quit-body = Forçar o encerramento irá finalizar "{ $name }" imediatament
+ quit = Encerrar
+ quit-title = Encerrar o processo?
+ quit-body = Deseja finalizar "{ $name }"?
++menu-only-graphs = Exibir apenas gráficos
++menu-show-processes = Exibir aplicativos e processos
+ menu-settings = Configurações...
+ menu-about = Sobre o Monitor do Sistema...
+ gpu-suspended-title = Suspensa
+diff --git a/src/config.rs b/src/config.rs
+index 475ed2d..2f1b8ab 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -36,12 +36,14 @@ impl AppTheme {
+ #[derive(Clone, CosmicConfigEntry, Debug, Deserialize, Eq, PartialEq, Serialize)]
+ pub struct Config {
+     pub app_theme: AppTheme,
++    pub graphs_only: bool,
+ }
+ 
+ impl Default for Config {
+     fn default() -> Self {
+         Self {
+             app_theme: AppTheme::System,
++            graphs_only: true,
+         }
+     }
+ }
+diff --git a/src/main.rs b/src/main.rs
+index aced239..efd5c18 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -237,6 +237,7 @@ pub enum Action {
+     None,
+     About,
+     Settings,
++    ToggleGraphsOnly,
+ }
+ 
+ impl Action {
+@@ -245,6 +246,7 @@ impl Action {
+             Self::None => Message::None,
+             Self::About => Message::ToggleContextPage(ContextPage::About),
+             Self::Settings => Message::ToggleContextPage(ContextPage::Settings),
++            Self::ToggleGraphsOnly => Message::ToggleGraphsOnly,
+         }
+     }
+ }
+@@ -276,6 +278,7 @@ pub enum DialogKind {
+ pub enum Message {
+     None,
+     AppTheme(AppTheme),
++    ToggleGraphsOnly,
+     Config(Box<Config>),
+     CpuGraph(ProcGraphKind),
+     DialogCancel,
+@@ -654,7 +657,7 @@ impl App {
+                 ))
+                 .push(widget::container(data).height(CARD_DATA_HEIGHT));
+ 
+-            if let Some(sort_category) = process_category {
++            if let Some(sort_category) = process_category.filter(|_| !self.config.graphs_only) {
+                 // The compare function is backwards, so this uses min_by
+                 if let Some(item) = self
+                     .processes
+@@ -973,9 +976,14 @@ impl App {
+         }
+ 
+         let card_height = space_s as f32 + SMALL_GRAPH_HEIGHT + space_s as f32;
+-        let min_width = 440.0;
++        let min_width = if self.config.graphs_only {
++            380.0
++        } else {
++            440.0
++        };
+         let content_width = size.width - (space_xl * 2) as f32;
+         enum DashboardLayout {
++            GraphsOnly,
+             Small,
+             Medium,
+             Large,
+@@ -984,7 +992,9 @@ impl App {
+         let large_cards = (large_width / min_width).floor()
+             * (size.height / (card_height + space_s as f32)).floor();
+         // Make sure there is enough space for all cards before attempting large layout
+-        let (graphs_width, layout) = if large_cards >= items.len() as f32 {
++        let (graphs_width, layout) = if self.config.graphs_only {
++            (content_width, DashboardLayout::GraphsOnly)
++        } else if large_cards >= items.len() as f32 {
+             (large_width, DashboardLayout::Large)
+         } else if content_width > MIN_PROCESSES_WIDTH + space_s as f32 + min_width {
+             (
+@@ -1056,7 +1066,7 @@ impl App {
+                             + (space_s as f32)
+                             + list_height(next_proc_count)
+                     }
+-                    DashboardLayout::Small => break,
++                    DashboardLayout::Small | DashboardLayout::GraphsOnly => break,
+                 };
+                 if total_height > rows_height.max(size.height) {
+                     break;
+@@ -1065,25 +1075,28 @@ impl App {
+                 proc_count = next_proc_count;
+             }
+         }
+-        for &(show_apps, list_count) in &[(true, app_count), (false, proc_count)] {
+-            list_cards.push(Element::from(
+-                widget::container(
+-                    widget::column!(self.top_processes_by(
+-                        show_apps,
+-                        self.process_sort.0,
+-                        self.process_sort.1,
+-                        true,
+-                        list_count as usize,
+-                    ))
+-                    .spacing(space_s),
+-                )
+-                .class(theme::Container::Card)
+-                .padding(space_s)
+-                .width(Length::Fill),
+-            ));
++        if !self.config.graphs_only {
++            for &(show_apps, list_count) in &[(true, app_count), (false, proc_count)] {
++                list_cards.push(Element::from(
++                    widget::container(
++                        widget::column!(self.top_processes_by(
++                            show_apps,
++                            self.process_sort.0,
++                            self.process_sort.1,
++                            true,
++                            list_count as usize,
++                        ))
++                        .spacing(space_s),
++                    )
++                    .class(theme::Container::Card)
++                    .padding(space_s)
++                    .width(Length::Fill),
++                ));
++            }
+         }
+ 
+         let content: Element<Message> = match layout {
++            DashboardLayout::GraphsOnly => column.into(),
+             DashboardLayout::Large => {
+                 // Top apps/processes as row next to graphs
+                 widget::row!(
+@@ -1143,7 +1156,7 @@ impl Application for App {
+     type Message = Message;
+ 
+     /// The unique application ID to supply to the window manager.
+-    const APP_ID: &'static str = "com.system76.CosmicMonitor";
++    const APP_ID: &'static str = "org.local.CosmicMonitorGraphs";
+ 
+     fn core(&self) -> &Core {
+         &self.core
+@@ -1242,7 +1255,10 @@ impl Application for App {
+         if self.selected.take().is_some() {
+             return Task::none();
+         }
+-        if matches!(self.nav_model.active_data::<NavPage>(), Some(NavPage::Applications)) {
++        if matches!(
++            self.nav_model.active_data::<NavPage>(),
++            Some(NavPage::Applications)
++        ) {
+             if !self.app_search.0.is_empty() || self.app_search.1.is_some() {
+                 return self.update(Message::AppSearch(String::new()));
+             }
+@@ -1288,6 +1304,10 @@ impl Application for App {
+                 config_set!(app_theme, app_theme);
+                 return self.update_config();
+             }
++            Message::ToggleGraphsOnly => {
++                let enabled = !self.config.graphs_only;
++                config_set!(graphs_only, enabled);
++            }
+             Message::Config(config) => {
+                 if *config != self.config {
+                     self.config = *config;
+diff --git a/src/menu.rs b/src/menu.rs
+index 0999f1d..f63d6ec 100644
+--- a/src/menu.rs
++++ b/src/menu.rs
+@@ -15,7 +15,7 @@ use crate::{Action, Config, Message, fl};
+ 
+ pub fn menu_bar<'a>(
+     core: &Core,
+-    _config: &Config,
++    config: &Config,
+     key_binds: &HashMap<KeyBind, Action>,
+ ) -> Element<'a, Message> {
+     menu::bar(vec![menu::Tree::with_children(
+@@ -28,6 +28,16 @@ pub fn menu_bar<'a>(
+         menu::items(
+             key_binds,
+             vec![
++                menu::Item::Button(
++                    if config.graphs_only {
++                        fl!("menu-show-processes")
++                    } else {
++                        fl!("menu-only-graphs")
++                    },
++                    None,
++                    Action::ToggleGraphsOnly,
++                ),
++                menu::Item::Divider,
+                 menu::Item::Button(fl!("menu-settings"), None, Action::Settings),
+                 menu::Item::Divider,
+                 menu::Item::Button(fl!("menu-about"), None, Action::About),

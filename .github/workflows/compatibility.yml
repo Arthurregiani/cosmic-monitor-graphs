@@ -1,0 +1,40 @@
+name: Build and upstream compatibility
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 12 * * 1'
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y desktop-file-utils
+      - run: python3 -m unittest discover -s tests -v
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [pinned, latest]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libxkbcommon-dev libwayland-dev libudev-dev libfontconfig1-dev libegl1-mesa-dev
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            .build/target
+          key: ${{ runner.os }}-${{ matrix.source }}-${{ hashFiles('upstream.json', 'patches/**') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.source }}-
+      - name: Compile tested revision
+        if: matrix.source == 'pinned'
+        run: python3 monitor.py check
+      - name: Compile current upstream with overlay
+        if: matrix.source == 'latest'
+        run: python3 monitor.py check --latest
