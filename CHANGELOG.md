@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0 — 2026-10-20
+
+- Added a prebuilt amd64 Debian package for Pop!_OS 24.04/COSMIC, with an independent executable, desktop entry and icons.
+- Added a tag-triggered Ubuntu 24.04 release workflow, runtime dependency detection, isolated dpkg install/removal checks and APT dependency simulation.
+- Included complete source archives with vendored Cargo dependencies and SHA256 sums, and documented migration from the manual user installation.
+
 ## 1.0.0 — 2026-10-20
 
 - Recovered the graphs-only modification after a project-folder move left its desktop shortcut pointing at the old location.

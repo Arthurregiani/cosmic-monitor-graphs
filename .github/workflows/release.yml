@@ -1,0 +1,43 @@
+name: Debian release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Check release version
+        run: test "$GITHUB_REF_NAME" = "v$(cat VERSION)"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install build and package tools
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libxkbcommon-dev libwayland-dev libudev-dev libfontconfig1-dev libegl1-mesa-dev dpkg-dev binutils fakeroot desktop-file-utils xz-utils
+      - uses: actions/cache@v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            .build/package-target
+          key: deb-ubuntu24-amd64-${{ hashFiles('upstream.json', 'patches/**') }}
+      - name: Installer tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Build Debian package under restrictive permissions
+        run: |
+          umask 077
+          python3 packaging/build_deb.py
+      - name: Test isolated installation and removal
+        run: python3 packaging/test_deb.py dist/*.deb
+      - name: Archive complete corresponding sources
+        run: python3 packaging/source_archive.py ".build/source-$(python3 -c 'import json; print(json.load(open("upstream.json"))["ref"])')"
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum *.deb *.tar.xz > SHA256SUMS
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.deb dist/*.tar.xz dist/SHA256SUMS --verify-tag --title "COSMIC Monitor Graphs ${GITHUB_REF_NAME}" --notes-file packaging/RELEASE.md
